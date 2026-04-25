@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     mongodb_url: Optional[str] = os.getenv("MONGODB_URL", None)
     supabase_url: Optional[str] = os.getenv("SUPABASE_URL", None)
     supabase_api_key: Optional[str] = os.getenv("SUPABASE_API_KEY", None)
+    supabase_anon_key: Optional[str] = os.getenv("SUPABASE_ANON_KEY", None)
     
     # Blockchain/Testnet Configuration
     blockchain_provider_url: Optional[str] = os.getenv("BLOCKCHAIN_PROVIDER_URL", None)

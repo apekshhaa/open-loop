@@ -10,6 +10,9 @@ from app.services.decision import DecisionService
 from app.services.treasury import TreasuryService
 from app.services.settler import SettlerService
 from app.services.auditor import AuditorService
+from app.services.wallet_gatekeeper import WalletGatekeeperService
+from app.services.reputation_service import ReputationService
+from app.services.db_service import SupabaseService
 
 __all__ = [
     "GatekeeperService",
@@ -17,5 +20,8 @@ __all__ = [
     "DecisionService",
     "TreasuryService",
     "SettlerService",
-    "AuditorService"
+    "AuditorService",
+    "WalletGatekeeperService",
+    "ReputationService",
+    "SupabaseService"
 ]

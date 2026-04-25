@@ -12,7 +12,7 @@ import logging
 
 from app.config import settings
 from app.models import HealthCheckResponse
-from app.routes import loan_router
+from app.routes import loan_router, wallet_loan_router, agent_router
 from app.utils import create_error_response
 
 # Configure logging
@@ -120,6 +120,8 @@ async def get_status():
 
 # Include loan routes
 app.include_router(loan_router)
+app.include_router(wallet_loan_router)
+app.include_router(agent_router)
 
 
 # ============== Root Route ==============
@@ -143,7 +145,8 @@ async def root():
         "endpoints": {
             "health": "/health",
             "status": "/status",
-            "loans": "/loan"
+            "loans": "/loan",
+            "wallet_loans": "/loan/wallet"
         }
     }
 

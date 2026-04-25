@@ -98,7 +98,61 @@ cp .env.example .env
 # At minimum, set:
 # - ENVIRONMENT=development
 # - SECRET_KEY=your-secret-key
-# Optional: Database and blockchain URLs
+# 
+# FOR DATABASE PERSISTENCE (Supabase):
+# - SUPABASE_URL=https://your-project.supabase.co
+# - SUPABASE_ANON_KEY=your-anon-key
+#
+# See SUPABASE_SETUP_GUIDE.md for complete setup instructions
+```
+
+### 2.5 (NEW) Setup Supabase Database
+
+The system now uses **Supabase** for persistent storage of:
+- ✅ Agent profiles and history
+- ✅ Loan records and decisions
+- ✅ Transaction hashes and audit trail
+
+**Quick Setup:**
+1. Go to https://supabase.com and create a free project
+2. Get `SUPABASE_URL` and `SUPABASE_ANON_KEY` from Settings → API
+3. Add to `.env` file
+4. Run SQL table creation scripts (see below)
+
+**Full Setup Guide:** See [SUPABASE_SETUP_GUIDE.md](SUPABASE_SETUP_GUIDE.md)  
+**Schema Documentation:** See [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md)
+
+**Create Database Tables** (Supabase SQL Editor):
+
+```sql
+-- Create agents table
+CREATE TABLE agents (
+  id BIGSERIAL PRIMARY KEY,
+  wallet_address TEXT UNIQUE NOT NULL,
+  created_at TIMESTAMP DEFAULT NOW(),
+  trust_score FLOAT DEFAULT 50.0,
+  total_loans INTEGER DEFAULT 0,
+  last_updated TIMESTAMP DEFAULT NOW()
+);
+CREATE INDEX idx_agents_wallet ON agents(wallet_address);
+
+-- Create loans table
+CREATE TABLE loans (
+  id BIGSERIAL PRIMARY KEY,
+  wallet_address TEXT NOT NULL REFERENCES agents(wallet_address),
+  amount FLOAT NOT NULL,
+  interest_rate FLOAT NOT NULL,
+  collateral_required FLOAT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('approved', 'rejected')),
+  credit_score FLOAT NOT NULL,
+  risk_level TEXT NOT NULL,
+  tx_hash TEXT,
+  decision_reason TEXT,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+CREATE INDEX idx_loans_wallet ON loans(wallet_address);
+CREATE INDEX idx_loans_status ON loans(status);
 ```
 
 ### 3. Run the Application
@@ -278,14 +332,27 @@ API_VERSION=1.0.0
 SECRET_KEY=your-secret-key
 ```
 
-### Database Configuration
+### Database Configuration - Supabase (Persistent Storage) ✅ **NEW**
 ```env
-# MongoDB
-MONGODB_URL=mongodb+srv://user:password@cluster.mongodb.net/ai_credit_system
+# Get these from https://supabase.com → Settings → API
+SUPABASE_URL=https://your-project-id.supabase.co
+SUPABASE_ANON_KEY=your-anon-key-here
 
-# OR Supabase
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_API_KEY=your-api-key
+# The system now:
+# ✅ Stores agent profiles with trust scores
+# ✅ Persists all loan requests and decisions
+# ✅ Tracks approval history per agent
+# ✅ Records blockchain transaction hashes
+# ✅ Maintains audit trail
+#
+# Complete Setup: See SUPABASE_SETUP_GUIDE.md
+# Schema Details: See DATABASE_SCHEMA.md
+```
+
+### Legacy Configuration (Optional)
+```env
+# MongoDB (alternative to Supabase)
+# MONGODB_URL=mongodb+srv://user:password@cluster.mongodb.net/ai_credit_system
 ```
 
 ### Blockchain Configuration
@@ -353,13 +420,13 @@ WALLET_ADDRESS=0x...
    - GET `/loan/{loan_id}/audit-trail`
    - Complete audit log of all pipeline events
 
-### AI Agent Loan Request Flow ⭐ **NEW**
-A streamlined single-endpoint pipeline for AI agents:
+### AI Agent Loan Request Flow ⭐ **NEW - WITH PERSISTENCE**
+A streamlined single-endpoint pipeline for AI agents with **Supabase database integration**:
 
 ```
-POST /loan/request?agent_id=AGENT-001&amount=50000
+POST /loan/request?wallet_address=0x742d35Cc...&amount=50000
     ↓
-[1] GATEKEEPER → Validates agent registration & status
+[1] GATEKEEPER → Validates wallet & gets/creates agent in database
     ↓
 [2] ANALYST → Calculates 0-100 credit score
     ├─ Success rate component (0-40 pts)
@@ -367,32 +434,46 @@ POST /loan/request?agent_id=AGENT-001&amount=50000
     └─ Loan amount component (0-50 pts)
     ↓
 [3] DECISION → Makes approval decision
-    ├─ Score > 70 → Approve @ 4.5% rate, 10% collateral
-    ├─ Score 50-70 → Approve @ 9.5% rate, 25% collateral
+    ├─ Score > 70 → Approve @ 3.5% rate, 10% collateral
+    ├─ Score 50-70 → Approve @ 7.5% rate, 25% collateral
     └─ Score < 50 → Reject
     ↓
 [4] TREASURY → Checks fund availability
     └─ Verifies sufficient capital in lending pool
     ↓
-[5] AUDITOR → Logs all pipeline events
+[5] PERSISTENCE → Stores loan record in Supabase
+    ├─ Saves to loans table
+    ├─ Updates agent profile
+    ├─ Records decision reason
+    └─ Ready for blockchain tx hash update
+    ↓
+[6] AUDITOR → Logs all pipeline events
     ├─ Identity verification
     ├─ Scoring details
     ├─ Decision rationale
-    └─ Fund availability status
+    └─ Database persistence confirmation
     ↓
-Returns: Loan decision with terms, rates, collateral, payments
+Returns: Loan decision with db_loan_id for transaction tracking
 ```
 
-**Quick Test:**
+**Data Persisted:**
+- Agent profile (wallet, trust_score, total_loans)
+- Loan record (amount, terms, credit_score, status)
+- Transaction hash (updated after MetaMask execution)
+- Audit trail (all events logged)
+
+**Quick Test with Persistence:**
 ```bash
-# Approved agent (high score)
-curl -X POST "http://localhost:8000/loan/request?agent_id=AGENT-001&amount=50000"
+# First request - creates agent, stores loan
+curl -X POST "http://localhost:8000/loan/request?wallet_address=0x742d35Cc6634C0532925a3b844Bc0f5a3d0E0E0&amount=50000"
 
-# Moderate agent (medium score)
-curl -X POST "http://localhost:8000/loan/request?agent_id=AGENT-003&amount=20000"
+# Response includes db_loan_id: "123"
 
-# Invalid agent (rejected at gatekeeper)
-curl -X POST "http://localhost:8000/loan/request?agent_id=INVALID&amount=50000"
+# Second request - same wallet, retrieves existing agent
+curl -X POST "http://localhost:8000/loan/request?wallet_address=0x742d35Cc6634C0532925a3b844Bc0f5a3d0E0E0&amount=25000"
+
+# Check Supabase Dashboard → agents table: total_loans incremented
+# Check Supabase Dashboard → loans table: Both loans stored
 ```
 
 For comprehensive testing guide, see [LOAN_REQUEST_GUIDE.md](LOAN_REQUEST_GUIDE.md).
@@ -438,17 +519,34 @@ curl -X POST http://localhost:8000/loan/{loan_id}/score \
 
 ## 🔌 Integration Points
 
-### TODO: Database Integration
-- **MongoDB**: Document store for loan applications and audit logs
-- **Supabase**: Relational database option for structured data
+### ✅ Database Integration - COMPLETE
+- **Supabase**: Persistent PostgreSQL database
+  - Agent profiles with trust scores
+  - Loan request history
+  - Audit trail with all pipeline events
+  - Blockchain transaction hash storage
+  - Ready for future analytics
 
-### TODO: External Services
+**Setup Files:**
+- [SUPABASE_SETUP_GUIDE.md](SUPABASE_SETUP_GUIDE.md) - Complete setup with step-by-step instructions
+- [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md) - Full schema documentation with examples
+- `app/services/db_service.py` - Database abstraction layer
+
+**Quick Start:**
+```bash
+# 1. Create Supabase project at https://supabase.com
+# 2. Get credentials and add to .env
+# 3. Run SQL table creation scripts (see SUPABASE_SETUP_GUIDE.md)
+# 4. Restart backend - database initialized automatically
+```
+
+### TODO: External Services (Next Phase)
 - **Identity Verification**: Veriff, IDology, or similar
 - **Credit Bureaus**: Equifax, Experian, TransUnion APIs
 - **Payment Processing**: Stripe, ACH, Wire transfer APIs
 - **Blockchain**: Web3.py for Ethereum testnet transactions
 
-### TODO: Machine Learning
+### TODO: Machine Learning (Future)
 - Credit scoring models
 - Fraud detection models
 - Loan approval prediction models
@@ -464,10 +562,15 @@ Each agent is completely independent and can:
 
 ## 📈 Future Enhancements
 
+- [x] Wallet-based agent identity (instead of agent IDs)
+- [x] Real database integration (Supabase PostgreSQL) ✅ NEW
+- [x] Deterministic credit scoring (same wallet = same score)
+- [x] Persistent loan history tracking ✅ NEW
+- [x] Agent approval rate analytics ✅ NEW
 - [ ] Async pipeline processing (message queues)
-- [ ] Real database integration (MongoDB/Supabase)
 - [ ] Machine learning models for scoring/decisions
-- [ ] Blockchain settlement (testnet)
+- [ ] Blockchain settlement (testnet - MetaMask integration)
+- [ ] Additional API endpoints (agent history, statistics)
 - [ ] User authentication and authorization
 - [ ] Rate limiting and throttling
 - [ ] API versioning

@@ -3,6 +3,11 @@ Loan routes module.
 
 Defines API endpoints for loan operations and pipeline management.
 All routes under /loan prefix.
+
+Now integrated with Supabase for persistent storage of:
+- Agent profiles and history
+- Loan records and decisions
+- Transaction hashes and audit trail
 """
 
 from fastapi import APIRouter, HTTPException, Query
@@ -22,8 +27,11 @@ from app.services import (
     DecisionService,
     TreasuryService,
     SettlerService,
-    AuditorService
+    AuditorService,
+    WalletGatekeeperService
 )
+from app.services.wallet_utils import validate_wallet_address
+from app.services.db_service import get_db_service
 from app.utils import (
     generate_loan_id,
     generate_log_id,
@@ -35,76 +43,127 @@ from app.utils import (
 
 router = APIRouter(prefix="/loan", tags=["loan"])
 
-# In-memory storage for loans (replace with database in production)
+# In-memory storage for loans (kept for backward compatibility)
 LOANS_DB = {}
 PIPELINE_STAGES = {}
 
 
 @router.post("/request")
-async def request_loan(agent_id: str, amount: float):
+async def request_loan(wallet_address: str, amount: float):
     """
-    Core loan request pipeline for AI agents.
+    Core loan request pipeline for AI agents using wallet-based identity.
+    
+    NOW WITH DATABASE PERSISTENCE:
+    - Stores agent profile in Supabase
+    - Records all loan requests and decisions
+    - Maintains audit trail of all transactions
+    
+    THIS ENDPOINT NOW REQUIRES A VALID ETHEREUM WALLET ADDRESS.
+    Agent identity is determined by the connected wallet, not an agent ID.
     
     This endpoint orchestrates the complete loan processing pipeline:
-    1. Gatekeeper: Validates agent identity
-    2. Analyst: Calculates credit score (0-100)
-    3. Decision: Makes approval decision based on score
+    1. Gatekeeper: Validates wallet address and generates deterministic profile
+    2. Analyst: Calculates credit score based on wallet profile (0-100)
+    3. Decision: Makes approval decision based on score and amount
     4. Treasury: Checks fund availability
-    5. Auditor: Logs all events
+    5. Auditor: Logs all events and stores in database
     
     Args:
-        agent_id: Unique identifier for the AI agent
-        amount: Requested loan amount
+        wallet_address: Ethereum wallet address (0x + 40 hex characters) - REQUIRED
+        amount: Requested loan amount (1 - 10,000,000) - REQUIRED
     
     Returns:
         Structured response with loan decision and terms
     
     Response includes:
-        - agent_id: The requesting agent
-        - score: Agent's credit score (0-100)
+        - wallet_address: The wallet requesting the loan
+        - credit_score: Wallet's credit score (0-100) based on deterministic profile
         - risk_level: Risk classification (low/medium/high/very_high)
         - interest_rate: Annual interest rate if approved
         - collateral_required: Required collateral amount
         - approved: True if loan approved, False otherwise
         - message: Human-readable decision message
         - funds_available: Whether treasury has funds
+        - db_loan_id: Database record ID for this loan (if stored)
+    
+    Raises:
+        HTTPException 400: If wallet_address is missing or invalid format
+        HTTPException 400: If amount is invalid
+        HTTPException 500: If processing error occurs
     """
+    db_service = None
+    db_loan_id = None
+    
     try:
-        # Validate input
-        if not agent_id or not isinstance(agent_id, str):
-            raise HTTPException(status_code=400, detail="agent_id is required (string)")
+        # Initialize database service
+        db_service = get_db_service()
+        
+        # ============================================================
+        # INPUT VALIDATION
+        # ============================================================
+        
+        # Check if wallet_address is provided
+        if not wallet_address or not isinstance(wallet_address, str):
+            raise HTTPException(
+                status_code=400, 
+                detail="Wallet not connected. Please connect your wallet to request a loan."
+            )
+        
+        # Validate wallet address format (0x + 40 hex characters = 42 total)
+        if not validate_wallet_address(wallet_address):
+            raise HTTPException(
+                status_code=400, 
+                detail="Invalid wallet address format. Must be 0x... with 40 hex characters (e.g., 0x742d35Cc6634C0532925a3b844Bc0f5a3d0E0E0)"
+            )
+        
+        # Validate amount
         if amount <= 0 or amount > 10_000_000:
-            raise HTTPException(status_code=400, detail="amount must be between 1 and 10,000,000")
+            raise HTTPException(
+                status_code=400, 
+                detail="amount must be between 1 and 10,000,000"
+            )
         
         request_id = generate_loan_id()
         
         # ============================================================
-        # STAGE 1: GATEKEEPER - Validate Agent Identity
+        # STAGE 1: GATEKEEPER - Validate Wallet Identity & Get/Create Agent
         # ============================================================
-        gatekeeper_result = GatekeeperService.validate_agent_identity(agent_id)
+        gatekeeper_result = await WalletGatekeeperService.validate_wallet_identity_with_db(
+            wallet_address,
+            db_service
+        )
+        
+        if not gatekeeper_result.get("valid"):
+            raise HTTPException(
+                status_code=400,
+                detail=gatekeeper_result.get("message", "Wallet validation failed")
+            )
         
         # Log identity verification
         AuditorService.log_event(
             loan_id=request_id,
             agent_name="gatekeeper",
-            event_type="identity_verification_completed",
+            event_type="wallet_verification_completed",
             details={
-                "agent_id": agent_id,
-                "agent_name": gatekeeper_result.get("agent_name"),
-                "status": gatekeeper_result.get("status")
+                "wallet_address": wallet_address,
+                "status": gatekeeper_result.get("status"),
+                "agent_tier": gatekeeper_result.get("agent_tier"),
+                "db_agent_id": gatekeeper_result.get("db_agent_id")
             }
         )
         
         # ============================================================
         # STAGE 2: ANALYST - Calculate Credit Score
         # ============================================================
-        # Pass agent profile data to analyst for more accurate scoring
+        # Pass wallet profile data to analyst for credit scoring
         agent_profile = {
             "success_rate": gatekeeper_result.get("success_rate", 0.70),
             "transaction_count": gatekeeper_result.get("transaction_count", 0),
             "repayment_history": gatekeeper_result.get("repayment_history", 0.70)
         }
-        score_result = AnalystService.calculate_agent_credit_score(agent_id, amount, agent_profile)
+        
+        # Use wallet address as identifier for scoring
+        score_result = AnalystService.calculate_agent_credit_score(wallet_address, amount, agent_profile)
         credit_score = score_result["score"]
         risk_level = score_result["risk_level"]
         confidence = score_result.get("confidence", 0.65)
@@ -116,7 +175,7 @@ async def request_loan(agent_id: str, amount: float):
             agent_name="analyst",
             event_type="credit_score_calculated",
             details={
-                "agent_id": agent_id,
+                "wallet_address": wallet_address,
                 "score": credit_score,
                 "risk_level": risk_level,
                 "components": score_result.get("components", {})
@@ -126,7 +185,7 @@ async def request_loan(agent_id: str, amount: float):
         # ============================================================
         # STAGE 3: DECISION - Make Approval Decision
         # ============================================================
-        decision_result = DecisionService.make_agent_decision(agent_id, credit_score, amount)
+        decision_result = DecisionService.make_agent_decision(wallet_address, credit_score, amount)
         approved = decision_result["approved"]
         interest_rate = decision_result["interest_rate"]
         collateral_required = decision_result["collateral_required"]
@@ -137,7 +196,7 @@ async def request_loan(agent_id: str, amount: float):
             agent_name="decision",
             event_type="loan_decision_made",
             details={
-                "agent_id": agent_id,
+                "wallet_address": wallet_address,
                 "approved": approved,
                 "credit_score": credit_score,
                 "interest_rate": interest_rate,
@@ -149,7 +208,7 @@ async def request_loan(agent_id: str, amount: float):
         # ============================================================
         # STAGE 4: TREASURY - Check Fund Availability
         # ============================================================
-        treasury_result = TreasuryService.check_fund_availability_for_agent(agent_id, amount)
+        treasury_result = TreasuryService.check_fund_availability_for_agent(wallet_address, amount)
         funds_available = treasury_result["funds_available"]
         
         # Log treasury check
@@ -158,7 +217,7 @@ async def request_loan(agent_id: str, amount: float):
             agent_name="treasury",
             event_type="fund_availability_checked",
             details={
-                "agent_id": agent_id,
+                "wallet_address": wallet_address,
                 "requested_amount": amount,
                 "available_funds": treasury_result["available_funds"],
                 "funds_available": funds_available
@@ -187,7 +246,7 @@ async def request_loan(agent_id: str, amount: float):
             agent_name="auditor",
             event_type="pipeline_complete",
             details={
-                "agent_id": agent_id,
+                "wallet_address": wallet_address,
                 "request_id": request_id,
                 "final_approved": final_approved,
                 "score": credit_score,
@@ -199,11 +258,59 @@ async def request_loan(agent_id: str, amount: float):
         )
         
         # ============================================================
+        # STAGE 5: PERSIST TO DATABASE
+        # ============================================================
+        # Store loan record in Supabase
+        try:
+            decision_reason = decision_result.get("decision_reason", "Decision made based on credit evaluation")
+            
+            db_loan = await db_service.create_loan_record(
+                wallet_address=wallet_address,
+                amount=amount,
+                interest_rate=final_interest_rate,
+                collateral_required=final_collateral,
+                status="approved" if final_approved else "rejected",
+                credit_score=credit_score,
+                risk_level=risk_level,
+                tx_hash=None,  # Will be updated after blockchain transaction
+                decision_reason=decision_reason
+            )
+            
+            db_loan_id = db_loan.get("id")
+            print(f"[Loan Route] Loan record created in DB: {db_loan_id}")
+            
+            # Log database persistence
+            AuditorService.log_event(
+                loan_id=request_id,
+                agent_name="persistence",
+                event_type="loan_stored_in_db",
+                details={
+                    "wallet_address": wallet_address,
+                    "db_loan_id": db_loan_id,
+                    "approved": final_approved
+                }
+            )
+        
+        except Exception as db_error:
+            # Log database error but don't fail the request
+            print(f"[Loan Route] Database error storing loan: {str(db_error)}")
+            AuditorService.log_event(
+                loan_id=request_id,
+                agent_name="persistence",
+                event_type="database_error",
+                details={
+                    "wallet_address": wallet_address,
+                    "error": str(db_error)
+                }
+            )
+        
+        # ============================================================
         # Return Final Response
         # ============================================================
         return {
             "request_id": request_id,
-            "agent_id": agent_id,
+            "wallet_address": wallet_address,
+            "agent_id": wallet_address,  # For backward compatibility with frontend
             "amount_requested": amount,
             "score": credit_score,
             "risk_level": risk_level,
@@ -216,6 +323,13 @@ async def request_loan(agent_id: str, amount: float):
             "monthly_payment": decision_result.get("monthly_payment", 0.0) if final_approved else 0.0,
             "total_interest": decision_result.get("total_interest", 0.0) if final_approved else 0.0,
             "message": final_message,
+            "db_loan_id": db_loan_id,  # Reference to database record
+            "wallet_profile": {
+                "success_rate": round(agent_profile.get("success_rate", 0) * 100, 1),
+                "transaction_count": agent_profile.get("transaction_count", 0),
+                "repayment_history": round(agent_profile.get("repayment_history", 0) * 100, 1),
+                "agent_tier": agent_tier
+            },
             "agent_profile": {
                 "success_rate": round(agent_profile.get("success_rate", 0) * 100, 1),
                 "transaction_count": agent_profile.get("transaction_count", 0),
@@ -224,16 +338,18 @@ async def request_loan(agent_id: str, amount: float):
             },
             "timestamp": datetime.utcnow().isoformat(),
             "pipeline_status": {
-                "gatekeeper": "valid" if gatekeeper_result["valid"] else "invalid",
+                "gatekeeper": "valid" if gatekeeper_result.get("valid") else "invalid",
                 "analyst": f"score_{int(credit_score)}",
                 "decision": "approved" if approved else "rejected",
-                "treasury": "available" if funds_available else "unavailable"
+                "treasury": "available" if funds_available else "unavailable",
+                "persistence": "saved" if db_loan_id else "pending"
             }
         }
     
     except HTTPException:
         raise
     except Exception as e:
+        print(f"[Loan Route] Unexpected error: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail=create_error_response("LOAN_REQUEST_ERROR", str(e))

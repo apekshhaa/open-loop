@@ -7,12 +7,12 @@ import { LogEntry, AnalysisData, ApiError } from '../types';
 import { requestLoan, simulateAnalysisProgress } from '../services/api';
 
 interface EngineProps {
-  agentId: string;
+  walletAddress: string;
   amount: number;
   onComplete: (data: AnalysisData) => void;
 }
 
-export function Engine({ agentId, amount, onComplete }: EngineProps) {
+export function Engine({ walletAddress, amount, onComplete }: EngineProps) {
   const [progress, setProgress] = useState(0);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [currentScore, setCurrentScore] = useState(0);
@@ -30,7 +30,7 @@ export function Engine({ agentId, amount, onComplete }: EngineProps) {
     const processLoan = async () => {
       try {
         setIsLoading(true);
-        addLog(`Initiating analysis for agent: ${agentId}...`);
+        addLog(`Initiating wallet-based analysis for: ${walletAddress}...`);
         addLog(`Loan amount requested: $${amount.toLocaleString()}`);
 
         // Simulate visual progress while making actual API call
@@ -45,7 +45,7 @@ export function Engine({ agentId, amount, onComplete }: EngineProps) {
         });
 
         // Make actual backend API call
-        const response = await requestLoan(agentId, amount);
+        const response = await requestLoan(walletAddress, amount);
 
         addLog('Backend analysis complete. Processing response...', 'success');
 
@@ -103,7 +103,7 @@ export function Engine({ agentId, amount, onComplete }: EngineProps) {
     return () => {
       if (cleanup) cleanup();
     };
-  }, [agentId, amount, onComplete]);
+  }, [walletAddress, amount, onComplete]);
 
   return (
     <div className="pt-12 pb-24 px-4 max-w-6xl mx-auto w-full flex flex-col gap-8">
@@ -135,7 +135,7 @@ export function Engine({ agentId, amount, onComplete }: EngineProps) {
               animate={{ backgroundColor: ['#FFD700', 'transparent', '#FFD700'] }}
               className="w-2 h-2 rounded-full" 
             />
-            &gt; STATUS: {isLoading ? 'PROCESSING' : 'COMPLETE'} | ANALYZING_{agentId.toUpperCase().slice(0, 8)}
+            &gt; STATUS: {isLoading ? 'PROCESSING' : 'COMPLETE'} | ANALYZING_{walletAddress.slice(2, 10).toUpperCase()}
           </div>
         </div>
         <div className="font-mono text-[10px] text-gold/30 text-right uppercase tracking-widest hidden sm:block">

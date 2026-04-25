@@ -80,10 +80,10 @@ export default function App() {
     }
   }, []);
 
-  const handleInitiateAnalysis = (agentId: string, amount: number) => {
+  const handleInitiateAnalysis = (walletAddress: string, amount: number) => {
     setData(prev => ({ 
       ...prev, 
-      agentId, 
+      agentId: walletAddress,  // Store wallet address in agentId field for backward compatibility
       amount,
     }));
     setCurrentScreen('engine');
@@ -126,7 +126,7 @@ export default function App() {
             {currentScreen === 'console' && <Console onInitiate={handleInitiateAnalysis} />}
             {currentScreen === 'engine' && (
               <Engine 
-                agentId={data.agentId} 
+                walletAddress={data.agentId}  // agentId field now stores wallet address
                 amount={data.amount}
                 onComplete={handleEngineComplete} 
               />
