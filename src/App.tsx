@@ -14,6 +14,8 @@ import { Engine } from './components/Engine';
 import { Verdict } from './components/Verdict';
 import { ExecutionHub } from './components/ExecutionHub';
 import { Ledger } from './components/Ledger';
+import DarkVeil from './components/DarkVeil';
+import ClickSpark from './components/ClickSpark';
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<AppScreen>('portal');
@@ -47,14 +49,21 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-void text-white selection:bg-gold selection:text-void font-sans">
+    <ClickSpark sparkColor="#FFD700" sparkSize={10} sparkRadius={15} sparkCount={8} duration={400}>
+      <div className="min-h-screen bg-void text-white selection:bg-gold selection:text-void font-sans">
       <TopBar />
       
       {currentScreen !== 'portal' && (
         <Sidebar currentScreen={currentScreen} setScreen={setCurrentScreen} />
       )}
 
-      <main className={`transition-all duration-500 ${currentScreen === 'portal' ? 'w-full' : 'md:ml-64'} pt-16`}>
+      {currentScreen !== 'portal' && (
+        <div className="fixed top-16 right-0 bottom-0 left-0 md:left-64 pointer-events-none z-0 opacity-80">
+          <DarkVeil speed={0.2} noiseIntensity={0.02} scanlineIntensity={0.1} warpAmount={0.3} />
+        </div>
+      )}
+
+      <main className={`relative z-10 transition-all duration-500 ${currentScreen === 'portal' ? 'w-full' : 'md:ml-64'} pt-16`}>
         <AnimatePresence mode="wait">
           <motion.div
             key={currentScreen}
@@ -91,5 +100,6 @@ export default function App() {
         <div className="absolute inset-0 scanline opacity-[0.03]" />
       </div>
     </div>
+    </ClickSpark>
   );
 }
