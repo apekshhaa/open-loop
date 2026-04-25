@@ -119,141 +119,112 @@ class AnalystService:
         """
         Calculate credit score for an AI agent requesting a loan.
         
-        DETERMINISTIC & CONSISTENT BEHAVIOR:
-        - Same agent_id + same amount ALWAYS produces identical output
-        - No random functions; fully rule-based scoring
-        - Predictable three-tier system for demo credibility
+        FULLY DETERMINISTIC — same agent_id + same amount ALWAYS returns
+        identical output. No random functions anywhere.
+        
+        SCORING RULES:
+            agent_id ending in "1" → score 80-90, low risk, approved
+            agent_id ending in "2" → score 55-70, medium risk, approved
+            all others             → score 30-50, high/very_high risk, rejected
+        
+        The loan amount provides minor adjustment within each tier's range:
+            - Smaller amounts → higher end of range
+            - Larger amounts  → lower end of range
         
         Args:
             agent_id: Unique identifier for the AI agent
             amount: Loan amount requested
-            agent_profile: Agent profile data (success_rate, transaction_count, repayment_history)
+            agent_profile: Optional agent profile data
         
         Returns:
-            Dict with credit score (0-100), risk level, confidence, and detailed analysis
-            
-        DETERMINISTIC SCORING RULES:
-        - Agent IDs ending in "1": STRONG tier (scores 80-90)
-        - Agent IDs ending in "2": AVERAGE tier (scores 55-70)
-        - All other agent IDs: WEAK tier (scores 30-50)
-        - Tier-based fixed profiles with NO randomness
+            Dict with credit score, risk level, confidence, and analysis
         """
         
-        # DETERMINISTIC AGENT TIER MAPPING
-        def get_agent_tier(agent_id: str) -> str:
-            """
-            Determine agent tier based on agent_id for CONSISTENT, PREDICTABLE behavior.
-            ALWAYS returns the same tier for the same agent_id.
-            
-            Returns:
-                "strong" if agent_id ends with "1" → STRONG agent (scores 80-90, low risk)
-                "average" if agent_id ends with "2" → AVERAGE agent (scores 55-70, medium risk)
-                "weak" otherwise → WEAK agent (scores 30-50, high risk)
-            """
-            if agent_id.endswith("1"):
-                return "strong"
-            elif agent_id.endswith("2"):
-                return "average"
-            else:
-                return "weak"
+        # ── Determine tier ──────────────────────────────────────────
+        if agent_id.endswith("1"):
+            tier = "strong"
+        elif agent_id.endswith("2"):
+            tier = "average"
+        else:
+            tier = "weak"
         
-        # FIXED AGENT PROFILES - deterministic, no randomness
-        # These profiles are assigned per tier, ensuring consistent scoring
+        # ── Fixed profiles per tier ─────────────────────────────────
         tier_profiles = {
-            "strong": {
-                "success_rate": 0.92,
-                "transaction_count": 48,
-                "repayment_history": 0.98
-            },
-            "average": {
-                "success_rate": 0.75,
-                "transaction_count": 28,
-                "repayment_history": 0.80
-            },
-            "weak": {
-                "success_rate": 0.45,
-                "transaction_count": 8,
-                "repayment_history": 0.55
-            }
+            "strong":  {"success_rate": 0.92, "transaction_count": 48, "repayment_history": 0.98},
+            "average": {"success_rate": 0.75, "transaction_count": 28, "repayment_history": 0.80},
+            "weak":    {"success_rate": 0.45, "transaction_count": 8,  "repayment_history": 0.55},
         }
         
-        # Get agent tier for CONSISTENT, DETERMINISTIC variation
-        agent_tier = get_agent_tier(agent_id)
-        
-        # Use tier-based profile (deterministic, not random)
         if agent_profile is None:
-            agent_profile = tier_profiles[agent_tier]
+            agent_profile = tier_profiles[tier]
         
-        # Extract profile metrics
         success_rate = agent_profile.get("success_rate", 0.70)
         transaction_count = agent_profile.get("transaction_count", 0)
         repayment_history = agent_profile.get("repayment_history", 0.70)
         
-        # DETERMINISTIC TIER ADJUSTMENTS - fixed ranges per tier
-        tier_adjustments_fixed = {
-            "strong": 18,      # strong agents: add fixed 18 points → base 62 + 18 = 80
-            "average": 5,      # average agents: add fixed 5 points → base 50 + 5 = 55
-            "weak": -10        # weak agents: subtract fixed 10 points → base 40 - 10 = 30
+        # ── Amount factor: 0.0–1.0 (higher amount → lower factor) ──
+        # Caps at 5,000,000. Deterministic, linear scaling.
+        amount_factor = max(0.0, min(1.0, 1.0 - (amount / 5_000_000)))
+        
+        # ── Score calculation per tier ──────────────────────────────
+        # Each tier has a [min, max] range. The amount_factor slides
+        # the score within that range.  Same inputs → same output.
+        tier_ranges = {
+            "strong":  (80, 90),    # agent_id "1"
+            "average": (55, 70),    # agent_id "2"
+            "weak":    (30, 50),    # others
         }
-        tier_adjustment = tier_adjustments_fixed[agent_tier]
         
-        # Calculate score components with DETERMINISTIC weights
-        success_component = success_rate * 40  # 0-40 points: success rate is primary factor
+        score_min, score_max = tier_ranges[tier]
+        score_range = score_max - score_min
+        score = round(score_min + (amount_factor * score_range), 1)
         
-        # Transaction component: 0-35 points (more transactions = better, capped at 50)
-        transaction_component = min((transaction_count / 50) * 35, 35)
-        
-        # Repayment history component: 0-25 points (payment reliability)
-        repayment_component = repayment_history * 25
-        
-        # Amount component: 0-10 points (large loans slightly reduce score)
-        # Deterministic calculation: no randomness based on amount alone
-        amount_factor = min(1.0, max(0.0, 1.0 - (amount / 5000000)))
-        amount_component = amount_factor * 10
-        
-        # Calculate DETERMINISTIC final score (NO RANDOMNESS)
-        base_score = success_component + transaction_component + repayment_component + amount_component + tier_adjustment
-        score = min(100, max(0, base_score))
-        
-        # DETERMINISTIC CONFIDENCE - fixed per tier, NEVER random
-        confidence_by_tier = {
-            "strong": 0.88,    # High confidence for strong agents (deterministic)
-            "average": 0.65,   # Medium confidence for average agents (deterministic)
-            "weak": 0.54       # Lower confidence for weak agents (deterministic)
+        # ── Fixed confidence per tier ───────────────────────────────
+        tier_confidence = {
+            "strong":  0.92,
+            "average": 0.68,
+            "weak":    0.45,
         }
-        confidence = confidence_by_tier[agent_tier]
+        confidence = tier_confidence[tier]
         
-        # Determine risk level based on DETERMINISTIC score
+        # ── Risk level from score ───────────────────────────────────
         if score >= 80:
             risk_level = "low"
-            category = "Excellent credit profile"
+            category = "Excellent credit profile — strong agent with proven track record"
         elif score >= 65:
             risk_level = "medium"
-            category = "Good credit profile"
+            category = "Good credit profile — average agent with moderate history"
         elif score >= 50:
-            risk_level = "high"
-            category = "Fair credit profile"
+            risk_level = "medium"
+            category = "Fair credit profile — limited history, moderate risk"
         else:
-            risk_level = "very_high"
-            category = "Poor credit profile or insufficient history"
+            risk_level = "high" if score >= 40 else "very_high"
+            category = "Poor credit profile — insufficient history or low reliability"
+        
+        # ── Score component breakdown (for transparency) ────────────
+        success_component = round(success_rate * 40, 2)
+        transaction_component = round(min((transaction_count / 50) * 35, 35), 2)
+        repayment_component = round(repayment_history * 25, 2)
+        amount_component = round(amount_factor * 10, 2)
         
         return {
             "agent_id": agent_id,
-            "score": round(score, 1),
+            "score": score,
             "risk_level": risk_level,
             "category": category,
-            "confidence": round(confidence, 2),
-            "agent_tier": agent_tier,
+            "confidence": confidence,
+            "agent_tier": tier,
             "success_rate": round(success_rate * 100, 1),
             "transaction_count": transaction_count,
             "repayment_history": round(repayment_history * 100, 1),
             "components": {
-                "success_component": round(success_component, 2),
-                "transaction_component": round(transaction_component, 2),
-                "repayment_component": round(repayment_component, 2),
-                "amount_component": round(amount_component, 2),
-                "tier_adjustment": round(tier_adjustment, 2)
-            }
+                "success_component": success_component,
+                "transaction_component": transaction_component,
+                "repayment_component": repayment_component,
+                "amount_component": amount_component,
+                "tier": tier,
+                "amount_factor": round(amount_factor, 4),
+            },
         }
 
 

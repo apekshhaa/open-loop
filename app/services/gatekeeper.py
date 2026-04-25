@@ -16,6 +16,48 @@ from app.models import AgentResponse, AgentStatus
 from datetime import datetime
 
 
+# ============================================================
+# DETERMINISTIC TIER PROFILES
+# These fixed profiles are shared between gatekeeper and analyst
+# to ensure consistent, predictable scoring across the pipeline.
+# ============================================================
+TIER_PROFILES = {
+    "strong": {
+        "success_rate": 0.92,
+        "transaction_count": 48,
+        "repayment_history": 0.98,
+    },
+    "average": {
+        "success_rate": 0.75,
+        "transaction_count": 28,
+        "repayment_history": 0.80,
+    },
+    "weak": {
+        "success_rate": 0.45,
+        "transaction_count": 8,
+        "repayment_history": 0.55,
+    },
+}
+
+
+def _get_agent_tier(agent_id: str) -> str:
+    """
+    Determine agent tier based on agent_id.
+    ALWAYS returns the same tier for the same agent_id.
+
+    Rules:
+        agent_id ending in "1" → "strong"  (scores 80-90, low risk)
+        agent_id ending in "2" → "average" (scores 55-70, medium risk)
+        anything else          → "weak"    (scores 30-50, high risk)
+    """
+    if agent_id.endswith("1"):
+        return "strong"
+    elif agent_id.endswith("2"):
+        return "average"
+    else:
+        return "weak"
+
+
 class GatekeeperService:
     """
     Identity verification agent for loan applicants.
@@ -88,34 +130,38 @@ class GatekeeperService:
     def validate_agent_identity(agent_id: str) -> Dict[str, Any]:
         """
         Validate if an agent is registered and active.
-        Auto-creates mock agent profiles for new agents.
-        
+        Creates deterministic tier-based profiles for any agent_id.
+
+        DETERMINISTIC RULES (no randomness):
+            agent_id ending in "1" → strong tier (high success, many txns)
+            agent_id ending in "2" → average tier (moderate metrics)
+            anything else          → weak tier (low metrics)
+
+        Same agent_id ALWAYS returns identical profile data.
+
         Args:
             agent_id: Unique identifier for the AI agent
-        
+
         Returns:
             Dict with validation status and agent details
         """
-        import random
-        
+
         if agent_id not in GatekeeperService.VALID_AGENTS:
-            # Auto-create a new agent profile with random attributes
-            success_rate = random.uniform(0.50, 0.95)
-            transaction_count = random.randint(1, 20)
-            repayment_history = random.uniform(0.60, 1.0)  # 60-100% on-time payments
-            
+            # Assign a DETERMINISTIC tier-based profile
+            tier = _get_agent_tier(agent_id)
+            profile = TIER_PROFILES[tier]
+
             GatekeeperService.VALID_AGENTS[agent_id] = {
                 "name": f"AI Agent {agent_id}",
                 "active": True,
-                "success_rate": round(success_rate, 2),
-                "transaction_count": transaction_count,
-                "repayment_history": round(repayment_history, 2),
-                "created_at": datetime.now().isoformat()
+                "tier": tier,
+                "success_rate": profile["success_rate"],
+                "transaction_count": profile["transaction_count"],
+                "repayment_history": profile["repayment_history"],
             }
-        
+
         agent = GatekeeperService.VALID_AGENTS[agent_id]
-        
-        # All agents are now considered valid (always return true)
+
         return {
             "valid": True,
             "agent_id": agent_id,
