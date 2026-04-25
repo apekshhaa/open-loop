@@ -1,0 +1,30 @@
+# Core Framework
+fastapi==0.104.1
+uvicorn==0.24.0
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+# Database (Optional - uncomment to use)
+# pymongo==4.6.0  # For MongoDB
+# motor==3.3.2  # For async MongoDB
+# supabase==2.3.4  # For Supabase
+
+# Blockchain/Web3 (Optional - uncomment to use)
+# web3==6.11.2  # For Ethereum interactions
+# eth-account==0.10.0  # For Ethereum account management
+
+# Utilities
+python-dotenv==1.0.0
+requests==2.31.0
+httpx==0.25.2
+
+# Development
+pytest==7.4.3
+pytest-asyncio==0.21.1
+black==23.12.0
+flake8==6.1.0
+mypy==1.7.1
+isort==5.13.2
+
+# Production
+gunicorn==21.2.0
