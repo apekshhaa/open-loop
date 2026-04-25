@@ -1,15 +1,18 @@
 import { motion } from 'motion/react';
 import { AureumPanel } from './AureumPanel';
-import { Gavel, Bolt, ShieldCheck, TrendingUp, AlertTriangle } from 'lucide-react';
-import { AnalysisData } from '../types';
+import { Gavel, Bolt, ShieldCheck, TrendingUp, AlertTriangle, Wallet } from 'lucide-react';
+import { AnalysisData, WalletState } from '../types';
+import { formatAddress } from '../services/wallet';
 
 interface VerdictProps {
   data: AnalysisData;
   onExecute: () => void;
   onRetry: () => void;
+  wallet: WalletState;
+  onConnectWallet: () => void;
 }
 
-export function Verdict({ data, onExecute, onRetry }: VerdictProps) {
+export function Verdict({ data, onExecute, onRetry, wallet, onConnectWallet }: VerdictProps) {
   const isApproved = data.approved;
   
   // Format risk level for display
@@ -170,13 +173,32 @@ export function Verdict({ data, onExecute, onRetry }: VerdictProps) {
         className="w-full max-w-md"
       >
         {isApproved ? (
-          <button 
-            onClick={onExecute}
-            className="w-full py-6 flex items-center justify-center gap-4 bg-gold text-void font-display font-black text-lg uppercase tracking-widest hover:bg-gold/90 transition-all shadow-[0_0_30px_rgba(255,215,0,0.4)] hover:shadow-[0_0_50px_rgba(255,215,0,0.6)] group"
-          >
-            Execute Disbursement
-            <Bolt size={20} className="fill-void group-hover:scale-125 transition-transform" />
-          </button>
+          <div className="flex flex-col gap-3">
+            {/* Main Execute Button */}
+            <button 
+              onClick={onExecute}
+              className="w-full py-6 flex items-center justify-center gap-4 bg-gold text-void font-display font-black text-lg uppercase tracking-widest hover:bg-gold/90 transition-all shadow-[0_0_30px_rgba(255,215,0,0.4)] hover:shadow-[0_0_50px_rgba(255,215,0,0.6)] group"
+            >
+              Execute Disbursement
+              <Bolt size={20} className="fill-void group-hover:scale-125 transition-transform" />
+            </button>
+
+            {/* Wallet status hint */}
+            {!wallet.isConnected ? (
+              <button
+                onClick={onConnectWallet}
+                className="w-full py-3 flex items-center justify-center gap-2 border border-gold/20 text-gold/50 font-mono text-[10px] uppercase tracking-widest hover:bg-gold/5 hover:text-gold transition-all"
+              >
+                <Wallet size={12} />
+                Connect wallet first for real blockchain transaction
+              </button>
+            ) : (
+              <div className="flex items-center justify-center gap-2 py-2 text-[10px] font-mono text-emerald-400/60 tracking-widest uppercase">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                Wallet connected: {formatAddress(wallet.address)} • Sepolia
+              </div>
+            )}
+          </div>
         ) : (
           <button 
             onClick={onRetry}

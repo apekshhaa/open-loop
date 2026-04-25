@@ -159,7 +159,20 @@ class DecisionService:
     def make_agent_decision(agent_id: str, credit_score: float, amount: float) -> Dict[str, Any]:
         """
         Make loan approval decision for an AI agent based on credit score.
-        EXPLICITLY SUPPORTS THREE DISTINCT EVALUATION SCENARIOS.
+        
+        DETERMINISTIC — same inputs always produce identical output.
+        
+        DECISION RULES (aligned with analyst score ranges):
+        
+        Score 80-90 (strong tier, agent_id ending "1"):
+            → APPROVED, 3.5% interest, 5% collateral
+        
+        Score 55-70 (average tier, agent_id ending "2"):
+            Score >= 60 → APPROVED, 7.5% interest, 20% collateral
+            Score <  60 → APPROVED, 9.5% interest, 25% collateral
+        
+        Score 30-50 (weak tier, other agent_ids):
+            → REJECTED, insufficient creditworthiness
         
         Args:
             agent_id: Unique identifier for the AI agent
@@ -167,81 +180,74 @@ class DecisionService:
             amount: Requested loan amount
         
         Returns:
-            Dict with decision, interest rate, collateral requirements, and explanation
-        
-        THREE EVALUATION SCENARIOS:
-        
-        SCENARIO 1 - STRONG AGENTS (credit_score 75-90):
-            - risk_level: low
-            - interest_rate: 3.5%-4.5% (best available)
-            - collateral_required: minimal (5%-10%)
-            - approved: True
-            - decision_reason: strong repayment history
-            - confidence: high (0.75-0.92)
-        
-        SCENARIO 2 - AVERAGE AGENTS (credit_score 50-70):
-            - risk_level: medium/high
-            - interest_rate: 7.5%-9.5% (moderate to premium)
-            - collateral_required: moderate (20%-25%)
-            - approved: True (with caution)
-            - decision_reason: moderate risk/average performance
-            - confidence: medium (0.55-0.75)
-        
-        SCENARIO 3 - WEAK AGENTS (credit_score 30-50):
-            - risk_level: high/very_high
-            - interest_rate: N/A or high if approved
-            - collateral_required: high or N/A
-            - approved: False (may be approved at margin)
-            - decision_reason: low reliability/insufficient history
-            - confidence: low (0.42-0.65)
+            Dict with decision, interest rate, collateral, explanation
         """
-        # EXPLICIT THREE-SCENARIO DECISION LOGIC:
-        # Scenario 1: STRONG AGENTS (scores 75-90) → APPROVED with low rates
-        # Scenario 2: AVERAGE AGENTS (scores 50-70) → APPROVED with moderate rates
-        # Scenario 3: WEAK AGENTS (scores 30-50) → May be REJECTED or approved with high rates
         
         if credit_score >= 80:
-            # STRONG AGENT: Excellent approval
+            # ── STRONG AGENT → Full approval at best rate ───────────
             approved = True
-            interest_rate = 3.5  # Best available rate for strong agents
-            collateral_required = amount * 0.05  # Minimal collateral needed
-            risk_category = "Excellent"  # Explicitly "Excellent" for strong agents
-            decision_reason = "Approved due to strong repayment history and low risk profile"
-            message = f"✓ Loan APPROVED at premium rate (3.5%) - Strong agent with outstanding creditworthiness"
-        elif credit_score > 70:
-            # STRONG AGENT: Good approval
-            approved = True
-            interest_rate = 4.5  # Competitive low rate
-            collateral_required = amount * 0.10  # 10% collateral
+            interest_rate = 3.5
+            collateral_required = round(amount * 0.05, 2)
             risk_category = "Low Risk"
-            decision_reason = "Approved based on solid transaction history and positive financial metrics"
-            message = f"✓ Loan APPROVED at competitive rate (4.5%) - Strong financial profile"
+            decision_reason = (
+                f"Approved: Agent {agent_id} has an excellent credit score of {credit_score:.1f}/100, "
+                f"indicating strong repayment history and high reliability. "
+                f"Qualified for premium rate of 3.5% with minimal collateral (5%)."
+            )
+            message = (
+                f"✓ Loan APPROVED at premium rate (3.5%) — "
+                f"Outstanding creditworthiness, score {credit_score:.1f}/100"
+            )
+        
         elif credit_score >= 60:
-            # AVERAGE AGENT: Moderate approval
+            # ── AVERAGE AGENT (upper) → Approved with moderate terms ─
             approved = True
-            interest_rate = 7.5  # Moderate rate for average agents
-            collateral_required = amount * 0.20  # 20% collateral required
+            interest_rate = 7.5
+            collateral_required = round(amount * 0.20, 2)
             risk_category = "Medium Risk"
-            decision_reason = "Approved with caution due to moderate risk and average performance"
-            message = f"~ Loan APPROVED at standard rate (7.5%) - Conditional approval with moderate collateral requirement"
+            decision_reason = (
+                f"Approved with conditions: Agent {agent_id} has a credit score of {credit_score:.1f}/100, "
+                f"reflecting moderate performance history. "
+                f"Standard rate of 7.5% applied with 20% collateral requirement."
+            )
+            message = (
+                f"~ Loan APPROVED at standard rate (7.5%) — "
+                f"Conditional approval, score {credit_score:.1f}/100"
+            )
+        
         elif credit_score >= 50:
-            # AVERAGE/WEAK BOUNDARY: Marginal approval
+            # ── AVERAGE AGENT (lower boundary) → Marginal approval ──
             approved = True
-            interest_rate = 9.5  # Higher rate for marginal cases
-            collateral_required = amount * 0.25  # 25% collateral required
+            interest_rate = 9.5
+            collateral_required = round(amount * 0.25, 2)
             risk_category = "Higher Risk"
-            decision_reason = "Approved at premium rate due to higher perceived risk and limited transaction history"
-            message = f"~ Loan APPROVED at premium rate (9.5%) - Marginal approval with significant risk premium"
+            decision_reason = (
+                f"Marginal approval: Agent {agent_id} has a credit score of {credit_score:.1f}/100, "
+                f"at the lower end of the acceptable range. "
+                f"Premium rate of 9.5% applied with 25% collateral to offset risk."
+            )
+            message = (
+                f"~ Loan APPROVED at premium rate (9.5%) — "
+                f"Marginal approval with significant collateral, score {credit_score:.1f}/100"
+            )
+        
         else:
-            # WEAK AGENT: Rejection
+            # ── WEAK AGENT → Rejected ───────────────────────────────
             approved = False
             interest_rate = 0.0
             collateral_required = 0.0
             risk_category = "Insufficient"
-            decision_reason = "Rejected due to low reliability score and insufficient credit history"
-            message = f"✗ Loan REJECTED - Score {credit_score:.1f} below approval threshold. Insufficient creditworthiness."
+            decision_reason = (
+                f"Rejected: Agent {agent_id} has a credit score of {credit_score:.1f}/100, "
+                f"which is below the minimum approval threshold of 50. "
+                f"Insufficient credit history and low reliability score prevent approval."
+            )
+            message = (
+                f"✗ Loan REJECTED — Score {credit_score:.1f}/100 below approval threshold. "
+                f"Insufficient creditworthiness for loan disbursement."
+            )
         
-        # Calculate monthly payment and total interest if approved
+        # ── Calculate repayment terms if approved ───────────────────
         if approved:
             monthly_rate = interest_rate / 100 / 12
             num_payments = 12  # 1-year term
@@ -267,7 +273,7 @@ class DecisionService:
             "credit_score": credit_score,
             "requested_amount": amount,
             "monthly_payment": round(monthly_payment, 2),
-            "total_interest": round(total_interest, 2)
+            "total_interest": round(total_interest, 2),
         }
 
 

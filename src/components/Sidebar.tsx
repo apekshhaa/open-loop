@@ -65,16 +65,7 @@ export function Sidebar({ currentScreen, setScreen }: SidebarProps) {
         })}
       </div>
 
-      <div className="mt-auto space-y-1 pt-4 border-t border-gold/5">
-        <button className="w-full flex items-center gap-4 px-6 py-4 text-gold/40 hover:text-gold transition-all group">
-          <Activity size={18} />
-          <span className="font-display uppercase tracking-[0.2em] text-[10px] font-bold">Diagnostics</span>
-        </button>
-        <button className="w-full flex items-center gap-4 px-6 py-4 text-gold/40 hover:text-gold transition-all group">
-          <Power size={18} />
-          <span className="font-display uppercase tracking-[0.2em] text-[10px] font-bold">Log Out</span>
-        </button>
-      </div>
+
     </nav>
   );
 }

@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 /**
  * API Integration Service
  * Handles all communication with the FastAPI backend

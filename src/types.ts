@@ -59,3 +59,19 @@ export interface ApiError {
   message: string;
   status?: number;
 }
+
+export interface WalletState {
+  address: string;
+  isConnected: boolean;
+  chainId: string;
+  isCorrectNetwork: boolean;
+}
+
+export type TransactionStatus = 'idle' | 'connecting' | 'switching_network' | 'signing' | 'broadcasting' | 'confirming' | 'success' | 'error';
+
+export interface TransactionState {
+  status: TransactionStatus;
+  txHash: string;
+  explorerUrl: string;
+  error: string;
+}

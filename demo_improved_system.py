@@ -204,42 +204,37 @@ This demo showcases the realistic and dynamic improvements:
 Key Improvements Demonstrated:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-1. AUTO-CREATION OF AGENTS
+1. DETERMINISTIC AGENT PROFILES
    • Unknown agent_ids are automatically registered
-   • Random profiles assigned (success_rate, transaction_count, repayment_history)
-   • Always returns valid=True - pipeline continues for all agents
+   • Fixed, tier-based profiles assigned (strong/average/weak)
+   • Tier is determined consistently by agent_id ending ("1" -> strong, "2" -> average)
    
-2. DYNAMIC CREDIT SCORING
-   • Scores vary between 0-100 based on:
-     - Success rate (40% weight)
-     - Transaction history (35% weight)
-     - Repayment history (25% weight)
-     - Loan amount (slight reduction for very large loans)
-   • Includes ±2 point randomness for realistic variation
+2. RULE-BASED CREDIT SCORING (NO RANDOMNESS)
+   • Scores are strictly calculated based on tier and loan amount
+   • Strong agents (id ends in 1): score 80-90
+   • Average agents (id ends in 2): score 55-70
+   • Weak agents (other ids): score 30-50
    • Clear categorization: Low/Medium/High/Very High risk
 
-3. NUANCED DECISION-MAKING
-   • Multiple approval tiers (5 tiers instead of 3):
-     - Score >= 80: 3.5% rate, 5% collateral (Excellent)
-     - Score > 70: 4.5% rate, 10% collateral (Low Risk)
-     - Score >= 60: 7.5% rate, 20% collateral (Medium Risk)
-     - Score >= 50: 9.5% rate, 25% collateral (Higher Risk)
-     - Score < 50: Rejection
+3. NUANCED & PREDICTABLE DECISION-MAKING
+   • Score >= 80: 3.5% rate, 5% collateral (Approved, Low Risk)
+   • Score >= 60: 7.5% rate, 20% collateral (Approved, Medium Risk)
+   • Score >= 50: 9.5% rate, 25% collateral (Approved, Higher Risk)
+   • Score < 50: Rejection
    
-4. REALISTIC VARIATION
-   • Same agent with different amounts produces different scores
-   • New agents get random profiles, leading to varied outcomes
-   • Interest rates span 3.5% to 9.5% (realistic range)
-   • Collateral ranges from 5% to 25% based on risk
+4. CONSISTENT OUTPUT FOR DEMOS
+   • Same agent + same amount ALWAYS yields identical output
+   • Zero randomness in the scoring or profile generation
+   • Highly predictable engine ideal for live demonstrations
    
 5. CLEAR DECISION MESSAGING
    • Detailed, context-aware messages
    • Shows actual score, risk category, and approval reason
    • Professional tone suitable for demo
 
-For Testing: Each request produces realistic, believable output suitable
-for a live demo - NOT always approving, NOT always rejecting, but varying
-based on actual computed scores.
+For Testing: Run the system multiple times with the exact same agent_id
+and amount. Notice how the output is 100% identical every time, ensuring
+a reliable live demo experience.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     """)
 

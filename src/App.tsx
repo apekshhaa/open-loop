@@ -3,9 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { AppScreen, AnalysisData } from './types';
+import { AppScreen, AnalysisData, WalletState } from './types';
 import { Sidebar } from './components/Sidebar';
 import { TopBar } from './components/TopBar';
 import { Portal } from './components/Portal';
@@ -16,6 +16,8 @@ import { ExecutionHub } from './components/ExecutionHub';
 import { Ledger } from './components/Ledger';
 import DarkVeil from './components/DarkVeil';
 import ClickSpark from './components/ClickSpark';
+import { connectWallet, switchToSepolia } from './services/wallet';
+import type { JsonRpcSigner } from 'ethers';
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<AppScreen>('portal');
@@ -34,6 +36,50 @@ export default function App() {
     totalInterest: 0,
   });
 
+  // ── Wallet State ─────────────────────────────────────────────
+  const [wallet, setWallet] = useState<WalletState>({
+    address: '',
+    isConnected: false,
+    chainId: '',
+    isCorrectNetwork: false,
+  });
+  const [signer, setSigner] = useState<JsonRpcSigner | null>(null);
+  const [isConnectingWallet, setIsConnectingWallet] = useState(false);
+
+  // ── Wallet Handlers ──────────────────────────────────────────
+  const handleConnectWallet = useCallback(async () => {
+    setIsConnectingWallet(true);
+    try {
+      const walletInfo = await connectWallet();
+
+      // If not on Sepolia, prompt to switch
+      if (!walletInfo.isCorrectNetwork) {
+        await switchToSepolia();
+        // Re-connect after network switch to get updated info
+        const updated = await connectWallet();
+        setWallet({
+          address: updated.address,
+          isConnected: true,
+          chainId: updated.chainId,
+          isCorrectNetwork: updated.isCorrectNetwork,
+        });
+        setSigner(updated.signer);
+      } else {
+        setWallet({
+          address: walletInfo.address,
+          isConnected: true,
+          chainId: walletInfo.chainId,
+          isCorrectNetwork: walletInfo.isCorrectNetwork,
+        });
+        setSigner(walletInfo.signer);
+      }
+    } catch (err: any) {
+      alert(err.message || 'Failed to connect wallet');
+    } finally {
+      setIsConnectingWallet(false);
+    }
+  }, []);
+
   const handleInitiateAnalysis = (agentId: string, amount: number) => {
     setData(prev => ({ 
       ...prev, 
@@ -51,7 +97,11 @@ export default function App() {
   return (
     <ClickSpark sparkColor="#FFD700" sparkSize={10} sparkRadius={15} sparkCount={8} duration={400}>
       <div className="min-h-screen bg-void text-white selection:bg-gold selection:text-void font-sans">
-      <TopBar />
+      <TopBar 
+        wallet={wallet}
+        onConnectWallet={handleConnectWallet}
+        isConnecting={isConnectingWallet}
+      />
       
       {currentScreen !== 'portal' && (
         <Sidebar currentScreen={currentScreen} setScreen={setCurrentScreen} />
@@ -86,9 +136,19 @@ export default function App() {
                 data={data} 
                 onExecute={() => setCurrentScreen('execution')} 
                 onRetry={() => setCurrentScreen('console')} 
+                wallet={wallet}
+                onConnectWallet={handleConnectWallet}
               />
             )}
-            {currentScreen === 'execution' && <ExecutionHub onFinish={() => setCurrentScreen('ledger')} />}
+            {currentScreen === 'execution' && (
+              <ExecutionHub 
+                onFinish={() => setCurrentScreen('ledger')}
+                signer={signer}
+                walletAddress={wallet.address}
+                isWalletConnected={wallet.isConnected}
+                onConnectWallet={handleConnectWallet}
+              />
+            )}
             {currentScreen === 'ledger' && <Ledger />}
           </motion.div>
         </AnimatePresence>
