@@ -19,25 +19,30 @@ export default function App() {
   const [currentScreen, setCurrentScreen] = useState<AppScreen>('portal');
   const [data, setData] = useState<AnalysisData>({
     agentId: '',
-    allocation: '',
+    amount: 0,
     creditScore: 0,
-    riskLevel: 'LOW',
-    interestRate: '4.2%',
+    riskLevel: 'low',
+    confidence: 0,
+    approved: true,
+    decisionReason: '',
+    interestRate: 0,
     collateral: '0.00',
-    approved: true
+    collateralRequired: 0,
+    monthlyPayment: 0,
+    totalInterest: 0,
   });
 
-  const handleInitiateAnalysis = (agentId: string, allocation: string) => {
-    setData(prev => ({ ...prev, agentId, allocation }));
+  const handleInitiateAnalysis = (agentId: string, amount: number) => {
+    setData(prev => ({ 
+      ...prev, 
+      agentId, 
+      amount,
+    }));
     setCurrentScreen('engine');
   };
 
-  const handleEngineComplete = (score: number) => {
-    setData(prev => ({ 
-      ...prev, 
-      creditScore: score,
-      approved: score > 750 // Simple threshold for demo
-    }));
+  const handleEngineComplete = (analysisData: AnalysisData) => {
+    setData(analysisData);
     setCurrentScreen('verdict');
   };
 
@@ -60,7 +65,13 @@ export default function App() {
           >
             {currentScreen === 'portal' && <Portal onEnter={() => setCurrentScreen('console')} />}
             {currentScreen === 'console' && <Console onInitiate={handleInitiateAnalysis} />}
-            {currentScreen === 'engine' && <Engine agentId={data.agentId} onComplete={handleEngineComplete} />}
+            {currentScreen === 'engine' && (
+              <Engine 
+                agentId={data.agentId} 
+                amount={data.amount}
+                onComplete={handleEngineComplete} 
+              />
+            )}
             {currentScreen === 'verdict' && (
               <Verdict 
                 data={data} 

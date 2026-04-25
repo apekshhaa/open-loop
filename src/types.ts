@@ -1,15 +1,51 @@
 export type AppScreen = 'portal' | 'console' | 'engine' | 'verdict' | 'execution' | 'ledger';
 
 export interface AnalysisData {
+  // Core input
   agentId: string;
-  allocation: string;
+  amount: number;
+  
+  // Credit analysis from backend
   creditScore: number;
-  riskLevel: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
-  interestRate: string;
-  collateral: string;
+  riskLevel: 'low' | 'medium' | 'high' | 'very_high' | 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  confidence: number;
+  
+  // Decision from backend
   approved: boolean;
+  decisionReason: string;
+  
+  // Loan terms from backend
+  interestRate: number;
+  collateral: string; // formatted as USD string
+  collateralRequired: number; // raw number
+  monthlyPayment: number;
+  totalInterest: number;
+  
+  // Optional
   rejectionReason?: string;
+  message?: string;
   txHash?: string;
+  
+  // Agent profile
+  agentProfile?: {
+    successRate: number;
+    transactionCount: number;
+    repaymentHistory: number;
+    agentTier: string;
+  };
+  
+  // Pipeline status
+  pipelineStatus?: {
+    gatekeeper: string;
+    analyst: string;
+    decision: string;
+    treasury: string;
+  };
+  
+  // Backend metadata
+  requestId?: string;
+  timestamp?: string;
+  fundsAvailable?: boolean;
 }
 
 export interface LogEntry {
@@ -17,4 +53,9 @@ export interface LogEntry {
   timestamp: string;
   message: string;
   type?: 'info' | 'success' | 'error' | 'warning';
+}
+
+export interface ApiError {
+  message: string;
+  status?: number;
 }

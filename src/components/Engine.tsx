@@ -2,18 +2,22 @@ import { motion } from 'motion/react';
 import { useState, useEffect } from 'react';
 import { AureumPanel } from './AureumPanel';
 import { TerminalLog } from './TerminalLog';
-import { Fingerprint, Radar, Target } from 'lucide-react';
-import { LogEntry } from '../types';
+import { Fingerprint, Radar, Target, AlertCircle } from 'lucide-react';
+import { LogEntry, AnalysisData, ApiError } from '../types';
+import { requestLoan, simulateAnalysisProgress } from '../services/api';
 
 interface EngineProps {
   agentId: string;
-  onComplete: (score: number) => void;
+  amount: number;
+  onComplete: (data: AnalysisData) => void;
 }
 
-export function Engine({ agentId, onComplete }: EngineProps) {
+export function Engine({ agentId, amount, onComplete }: EngineProps) {
   const [progress, setProgress] = useState(0);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [currentScore, setCurrentScore] = useState(0);
+  const [error, setError] = useState<ApiError | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   const addLog = (message: string, type: LogEntry['type'] = 'info') => {
     const timestamp = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }) + '.' + Math.floor(Math.random() * 1000).toString().padStart(3, '0');
@@ -21,39 +25,108 @@ export function Engine({ agentId, onComplete }: EngineProps) {
   };
 
   useEffect(() => {
-    const sequence = [
-      { delay: 500, msg: `Initiating neural analysis for entity ${agentId}...`, progress: 10 },
-      { delay: 1500, msg: "Establishing handshake with validator nodes...", progress: 20 },
-      { delay: 2500, msg: "Retrieving cross-chain behavioral footprints...", progress: 35 },
-      { delay: 4000, msg: "Identity verification synced. Confidence: 99.8%", type: 'success' as const, progress: 50 },
-      { delay: 5500, msg: "Scanning liquidity depth across 12 protocol clusters...", progress: 65 },
-      { delay: 7000, msg: "Analyzing risk vectors from historical volatility matrix...", progress: 80, type: 'warning' as const },
-      { delay: 8500, msg: "Solvability vectors stabilized. Finalizing score...", progress: 95 },
-      { delay: 10000, msg: "Engine calculation complete. Generating verdict.", type: 'success' as const, progress: 100 },
-    ];
+    let cleanup: (() => void) | null = null;
 
-    sequence.forEach((step, idx) => {
-      setTimeout(() => {
-        addLog(step.msg, step.type);
-        setProgress(step.progress);
-        if (idx === sequence.length - 1) {
-          setTimeout(() => onComplete(842), 1500); // Prime score
-        }
-      }, step.delay);
-    });
+    const processLoan = async () => {
+      try {
+        setIsLoading(true);
+        addLog(`Initiating analysis for agent: ${agentId}...`);
+        addLog(`Loan amount requested: $${amount.toLocaleString()}`);
 
-    const scoreInterval = setInterval(() => {
-      setCurrentScore(prev => {
-        if (prev < 842) return prev + Math.floor(Math.random() * 15);
-        return 842;
-      });
-    }, 100);
+        // Simulate visual progress while making actual API call
+        cleanup = simulateAnalysisProgress((msg, progressValue, type) => {
+          addLog(msg, type);
+          setProgress(progressValue);
+          
+          // Animate score based on progress
+          if (progressValue > 0) {
+            setCurrentScore(Math.min(100, Math.floor((progressValue / 100) * 90) + 10));
+          }
+        });
 
-    return () => clearInterval(scoreInterval);
-  }, []);
+        // Make actual backend API call
+        const response = await requestLoan(agentId, amount);
+
+        addLog('Backend analysis complete. Processing response...', 'success');
+
+        // Parse response and create AnalysisData
+        const analysisData: AnalysisData = {
+          agentId: response.agent_id,
+          amount: response.amount_requested,
+          creditScore: response.score,
+          riskLevel: response.risk_level as any,
+          confidence: response.confidence,
+          approved: response.approved,
+          decisionReason: response.decision_reason,
+          interestRate: response.interest_rate,
+          collateral: `$${response.collateral_required.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+          collateralRequired: response.collateral_required,
+          monthlyPayment: response.monthly_payment,
+          totalInterest: response.total_interest,
+          message: response.message,
+          requestId: response.request_id,
+          timestamp: response.timestamp,
+          fundsAvailable: response.funds_available,
+          agentProfile: response.agent_profile ? {
+            successRate: response.agent_profile.success_rate,
+            transactionCount: response.agent_profile.transaction_count,
+            repaymentHistory: response.agent_profile.repayment_history,
+            agentTier: response.agent_profile.agent_tier,
+          } : undefined,
+          pipelineStatus: response.pipeline_status,
+        };
+
+        setCurrentScore(Math.round(response.score));
+        setProgress(100);
+
+        addLog(`Credit Score Calculated: ${response.score}`, 'success');
+        addLog(`Decision: ${response.approved ? 'APPROVED' : 'REJECTED'}`, response.approved ? 'success' : 'warning');
+        addLog(`Risk Level: ${response.risk_level}`, 'info');
+        addLog('Verdict ready. Proceeding to decision display...', 'success');
+
+        // Wait a moment before completing to show final progress
+        setTimeout(() => {
+          onComplete(analysisData);
+        }, 1500);
+
+      } catch (err) {
+        const apiError = err as ApiError;
+        setError(apiError);
+        addLog(`ERROR: ${apiError.message}`, 'error');
+        addLog('Analysis failed. Please try again.', 'error');
+        setIsLoading(false);
+      }
+    };
+
+    processLoan();
+
+    return () => {
+      if (cleanup) cleanup();
+    };
+  }, [agentId, amount, onComplete]);
 
   return (
     <div className="pt-12 pb-24 px-4 max-w-6xl mx-auto w-full flex flex-col gap-8">
+      {error && (
+        <motion.div 
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-red-500/10 border border-red-500/30 rounded-lg p-6 flex items-start gap-4"
+        >
+          <AlertCircle className="text-red-400 shrink-0 mt-1" size={24} />
+          <div>
+            <h3 className="font-display font-bold text-red-300 mb-1">Analysis Failed</h3>
+            <p className="font-mono text-sm text-red-200">{error.message}</p>
+            <button 
+              onClick={() => window.location.reload()}
+              className="mt-4 px-4 py-2 bg-red-500/20 border border-red-500/50 text-red-300 rounded hover:bg-red-500/30 transition-all font-mono text-sm"
+            >
+              Try Again
+            </button>
+          </div>
+        </motion.div>
+      )}
+
       <div className="flex justify-between items-end border-b border-gold/20 pb-4">
         <div>
           <h2 className="font-display text-4xl font-bold text-gold glow-gold">Neural Processing Engine</h2>
@@ -62,11 +135,11 @@ export function Engine({ agentId, onComplete }: EngineProps) {
               animate={{ backgroundColor: ['#FFD700', 'transparent', '#FFD700'] }}
               className="w-2 h-2 rounded-full" 
             />
-            &gt; STATUS: SYNCHRONIZED | PROCESSING_COHORT_A9
+            &gt; STATUS: {isLoading ? 'PROCESSING' : 'COMPLETE'} | ANALYZING_{agentId.toUpperCase().slice(0, 8)}
           </div>
         </div>
         <div className="font-mono text-[10px] text-gold/30 text-right uppercase tracking-widest hidden sm:block">
-          T+0.00ms Latency <br /> Node: OMEGA-7
+          Processing Loan Request <br /> Amount: ${amount.toLocaleString()}
         </div>
       </div>
 
@@ -80,11 +153,11 @@ export function Engine({ agentId, onComplete }: EngineProps) {
                 <motion.div 
                   animate={{ y: [-60, 60, -60] }}
                   transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
-                  className="absolute w-full h-[2px] bg-gold shadow-[0_0_15px_#ffd700] z-20"
+                  className="absolute w-full h-0.5 bg-gold shadow-[0_0_15px_#ffd700] z-20"
                 />
                 {/* Decorative Rings */}
                 <div className="absolute inset-0 rounded-full border border-gold/20" />
-                <div className="absolute inset-[-10px] rounded-full border border-gold/10" />
+                <div className="absolute -inset-2.5 rounded-full border border-gold/10" />
               </div>
               <div className="mt-8 font-mono text-[10px] text-gold/60 flex justify-between w-full border-t border-gold/10 pt-4 px-4">
                 <span>&gt; MATCH: 99.8%</span>
@@ -106,7 +179,7 @@ export function Engine({ agentId, onComplete }: EngineProps) {
                 <motion.div 
                   animate={{ rotate: 360 }}
                   transition={{ duration: 4, repeat: Infinity, ease: 'linear' }}
-                  className="absolute inset-0 rounded-full bg-gradient-to-tr from-transparent via-transparent to-gold/20 origin-center"
+                  className="absolute inset-0 rounded-full bg-linear-to-tr from-transparent via-transparent to-gold/20 origin-center"
                 />
 
                 {/* Data Points */}
