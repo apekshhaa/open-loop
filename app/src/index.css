@@ -1,0 +1,171 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 240 24% 4%;
+    --foreground: 40 33% 93%;
+    --card: 240 18% 8%;
+    --card-foreground: 40 33% 93%;
+    --popover: 240 18% 8%;
+    --popover-foreground: 40 33% 93%;
+    --primary: 40 33% 93%;
+    --primary-foreground: 240 24% 4%;
+    --secondary: 240 10% 12%;
+    --secondary-foreground: 40 33% 93%;
+    --muted: 240 10% 12%;
+    --muted-foreground: 38 9% 50%;
+    --accent: 36 43% 81%;
+    --accent-foreground: 240 24% 4%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 40 33% 93% / 0.08;
+    --input: 40 33% 93% / 0.1;
+    --ring: 36 43% 81%;
+    --radius: 0.625rem;
+  }
+
+  body {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    background-color: #0A0A0F;
+    color: #F5F0E8;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+@keyframes kenBurns {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.03); }
+  100% { transform: scale(1); }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(var(--translate-y, 40px));
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInScale {
+  from {
+    opacity: 0;
+    transform: translateY(-50%) scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(-50%) scale(1);
+  }
+}
+
+@keyframes navItemIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes modalOverlayIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes modalContentIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes modalOverlayOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes modalContentOut {
+  from {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.95) translateY(10px);
+  }
+}
+
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes toastOut {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+}
+
+.hero-bg {
+  animation: kenBurns 20s ease-in-out infinite;
+  will-change: transform;
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp var(--duration, 800ms) cubic-bezier(0.16, 1, 0.3, 1) var(--delay, 0ms) both;
+}
+
+.animate-nav-item {
+  animation: navItemIn 400ms cubic-bezier(0.16, 1, 0.3, 1) var(--delay, 0ms) both;
+}
+
+.animate-fade-in-scale {
+  animation: fadeInScale 500ms ease-out var(--delay, 0ms) both;
+}
+
+.modal-overlay-enter {
+  animation: modalOverlayIn 200ms ease-out both;
+}
+
+.modal-content-enter {
+  animation: modalContentIn 300ms cubic-bezier(0.16, 1, 0.3, 1) 50ms both;
+}
+
+.modal-overlay-exit {
+  animation: modalOverlayOut 150ms ease-in both;
+}
+
+.modal-content-exit {
+  animation: modalContentOut 200ms ease-in both;
+}
+
+.toast-enter {
+  animation: toastIn 300ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.toast-exit {
+  animation: toastOut 300ms ease-in both;
+}

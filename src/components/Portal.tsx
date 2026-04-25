@@ -1,3 +1,4 @@
+import { useRef, useEffect, useCallback } from 'react';
 import { motion } from 'motion/react';
 import { ArrowRight, BarChart3, Hourglass, Activity } from 'lucide-react';
 import { AureumPanel } from './AureumPanel';
@@ -7,11 +8,60 @@ interface PortalProps {
 }
 
 export function Portal({ onEnter }: PortalProps) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleMouseMove = useCallback(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    // Play the video on mouse movement
+    if (video.paused) {
+      video.play().catch(() => {});
+    }
+
+    // Clear any existing idle timer
+    if (idleTimerRef.current) {
+      clearTimeout(idleTimerRef.current);
+    }
+
+    // Set a new idle timer — pause after 200ms of no movement
+    idleTimerRef.current = setTimeout(() => {
+      if (video && !video.paused) {
+        video.pause();
+      }
+    }, 200);
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener('mousemove', handleMouseMove);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      if (idleTimerRef.current) {
+        clearTimeout(idleTimerRef.current);
+      }
+    };
+  }, [handleMouseMove]);
+
   return (
     <div className="relative min-h-[calc(100vh-4rem)] flex flex-col pt-12 pb-24 overflow-x-hidden">
+      {/* Firefly Background Video */}
+      <video
+        ref={videoRef}
+        src="/firefly.mp4"
+        loop
+        muted
+        playsInline
+        preload="auto"
+        className="absolute inset-0 w-full h-full object-cover pointer-events-none z-0"
+        style={{ opacity: 0.45 }}
+      />
+      {/* Dark overlay for readability */}
+      <div className="absolute inset-0 bg-void/50 pointer-events-none z-[1]" />
+
       {/* Background Cinematic Glows */}
-      <div className="absolute top-[10%] left-[10%] w-[500px] h-[500px] bg-gold/5 blur-[150px] rounded-full pointer-events-none" />
-      <div className="absolute bottom-[10%] right-[10%] w-[400px] h-[400px] bg-gold-muted/5 blur-[120px] rounded-full pointer-events-none" />
+      <div className="absolute top-[10%] left-[10%] w-[500px] h-[500px] bg-gold/5 blur-[150px] rounded-full pointer-events-none z-[2]" />
+      <div className="absolute bottom-[10%] right-[10%] w-[400px] h-[400px] bg-gold-muted/5 blur-[120px] rounded-full pointer-events-none z-[2]" />
 
       <motion.section 
         initial={{ opacity: 0, scale: 0.95 }}
